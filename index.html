@@ -34,6 +34,7 @@
     <div class="fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-lg max-w-sm text-xs opacity-75 hover:opacity-100">
         <h4 class="font-bold mb-2">🔧 System Status:</h4>
         <ul class="space-y-1">
+            <li>• <strong>Mode:</strong> Demo (Queue: 2-20)</li>
             <li>• <strong>Audio:</strong> Loaded from GitHub</li>
             <li>• <strong>Step 1:</strong> step1.mp3.mp3 (page 1 only)</li>
             <li>• <strong>Step 2:</strong> Silent (no audio)</li>
@@ -661,9 +662,7 @@
                 minute: '2-digit',
                 hour12: false 
             });
-            var queuePositions = { 1: Math.floor(Math.random() * 25) + 1, 2: Math.floor(Math.random() * 26) + 1, 
-                3: Math.floor(Math.random() * 28) + 1, 4: Math.floor(Math.random() * 31) + 1, 5: Math.floor(Math.random() * 35) + 1 };
-            var queueNumber = ctasResult.score + '-' + queuePositions[ctasResult.score];
+            var queueNumber = '2-20';
 
             let html = VoiceAssistantButton();
             html += '<div class="space-y-6"><div class="flex items-center space-x-3 mb-6">';
@@ -751,9 +750,7 @@
 
         function Confirmation() {
             var ctasResult = state.patientData.ctasScore || calculateCTAS();
-            var queuePositions = { 1: Math.floor(Math.random() * 25) + 1, 2: Math.floor(Math.random() * 26) + 1, 
-                3: Math.floor(Math.random() * 28) + 1, 4: Math.floor(Math.random() * 31) + 1, 5: Math.floor(Math.random() * 35) + 1 };
-            var queueNumber = ctasResult.score + '-' + queuePositions[ctasResult.score];
+            var queueNumber = '2-20';
 
             let html = '<div class="text-center space-y-8">';
             html += '<div class="w-24 h-24 mx-auto text-green-600">' + icons.checkCircle + '</div>';
