@@ -34,11 +34,11 @@
     <div class="fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-lg max-w-sm text-xs opacity-75 hover:opacity-100">
         <h4 class="font-bold mb-2">🔧 System Status:</h4>
         <ul class="space-y-1">
-            <li>• <strong>Audio:</strong> Step1.mp3 (page 1 only)</li>
-            <li>• <strong>Audio:</strong> Step3-7.mp3 (pages 3-7)</li>
-            <li>• <strong>ElevenLabs:</strong> speak() function</li>
-            <li>• <strong>Claude API:</strong> getAIResponse() function</li>
-            <li>• Check browser console for logs</li>
+            <li>• <strong>Audio:</strong> Loaded from GitHub</li>
+            <li>• <strong>Step 1:</strong> step1.mp3.mp3 (page 1 only)</li>
+            <li>• <strong>Step 2:</strong> Silent (no audio)</li>
+            <li>• <strong>Step 3-7:</strong> step3-7.mp3.mp3</li>
+            <li>• <strong>Repository:</strong> TobiAwodoyin/er-checkin-kiosk</li>
         </ul>
     </div>
 
@@ -52,12 +52,22 @@
             }
             
             var audioFile = '';
+            var baseUrl = 'https://raw.githubusercontent.com/TobiAwodoyin/er-checkin-kiosk/main/';
+            
             if (step === 1) {
-                audioFile = 'Step1.mp3';
+                audioFile = baseUrl + 'step1.mp3.mp3';
             } else if (step === 2) {
                 audioFile = '';
-            } else if (step >= 3 && step <= 7) {
-                audioFile = 'Step' + step + '.mp3';
+            } else if (step === 3) {
+                audioFile = baseUrl + 'step3.mp3.mp3';
+            } else if (step === 4) {
+                audioFile = baseUrl + 'step4.mp3.mp3';
+            } else if (step === 5) {
+                audioFile = baseUrl + 'step5.mp3.mp3';
+            } else if (step === 6) {
+                audioFile = baseUrl + 'step6.mp3.mp3';
+            } else if (step === 7) {
+                audioFile = baseUrl + 'step7.mp3.mp3';
             }
             
             if (audioFile) {
@@ -65,7 +75,7 @@
                 audioPlayer = new Audio(audioFile);
                 audioPlayer.play().catch(function(error) {
                     console.error('Audio playback failed:', error);
-                    console.log('Make sure', audioFile, 'is in the same folder as index.html');
+                    console.log('Make sure the file exists at:', audioFile);
                 });
             } else {
                 console.log('No audio for step', step);
