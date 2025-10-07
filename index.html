@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triage ER Self Check In System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 1; 
+            }
+            50% { 
+                opacity: 0.5; 
+            }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        .animate-ping {
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-6">
+    <div id="app" class="max-w-5xl mx-auto"></div>
+
+    <div class="fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-lg max-w-sm text-xs opacity-75 hover:opacity-100">
+        <h4 class="font-bold mb-2">🔧 API Integration Points:</h4>
+        <ul class="space-y-1">
+            <li>• <strong>ElevenLabs:</strong> speak() function</li>
+            <li>• <strong>Claude API:</strong> getAIResponse() function</li>
+            <li>• <strong>Voice trigger:</strong> "Hello Assistant"</li>
+            <li>• Check browser console for API calls</li>
+        </ul>
+    </div>
+
+    <script>
+        let state = {
+            step: 1,
+            language: '',
+            showSuggestions: false,
+            isVoiceActive: false,
+            isSpeaking: false,
+            showHistoryConfirmation: false,
+            patientData: {
+                healthCardNumber: '',
+                firstName: '',
+                lastName: '',
+                dob: '',
+                address: '',
+                phone: '',
+                selectedSymptoms: [],
+                otherSymptom: '',
+                allergies: [],
+                onFileAllergies: [],
+                newAllergies: [],
+                otherAllergy: '',
+                medications: '',
+                onFileMedications: '',
+                newMedications: '',
+                pastConditions: [],
+                onFilePastConditions: [],
+                newPastConditions: [],
+                surgicalHistory: [],
+                onFileSurgicalHistory: [],
+                newSurgicalHistory: [],
+                socialHistory: {
+                    occupation: '',
+                    housingCondition: '',
+                    tobaccoPerDay: '',
+                    alcoholPerDay: '',
+                    substances: []
+                },
+                onFileSocialHistory: null,
+                ctasScore: null
+            }
+        };
+
+        const patientDatabase = [
+            { 
+                healthCardNumber: '1234-5678-9012', 
+                firstName: 'Harpreet', 
+                lastName: 'Singh', 
+                dob: '1970-03-15', 
+                address: '123 Main St, Edmonton AB', 
+                phone: '780-555-0101',
+                allergies: ['Ibuprofen', 'Morphine'],
+                medications: ['Apixaban', 'Metformin', 'Perindopril', 'Calcium and Vitamin D'],
+                pastConditions: ['Hypertension'],
+                surgicalHistory: ['Appendectomy'],
+                socialHistory: {
+                    occupation: 'Construction Worker',
+                    housingCondition: 'Own home',
+                    tobaccoPerDay: '5',
+                    alcoholPerDay: '2 standard drinks',
+                    substances: []
+                }
+            }
+        ];
+
+        const commonSurgeries = [
+            'Appendectomy', 'Cholecystectomy', 'Caesarean Section', 'Tonsillectomy', 
+            'Hysterectomy', 'Hernia repair', 'Hip replacement', 'Knee replacement',
+            'Coronary artery bypass', 'Cataract surgery', 'Mastectomy', 'Prostatectomy'
+        ];
+
+        const symptomsBySystem = {
+            'Cardiovascular': ['Chest pain/pressure', 'Palpitations', 'Shortness of breath', 'Leg swelling', 'Irregular heartbeat', 'Dizziness/lightheadedness'],
+            'Respiratory': ['Difficulty breathing', 'Cough', 'Wheezing', 'Coughing up blood', 'Chest tightness'],
+            'Gastrointestinal': ['Abdominal pain', 'Nausea', 'Vomiting', 'Diarrhea', 'Constipation', 'Blood in stool', 'Loss of appetite'],
+            'Neurological': ['Headache', 'Confusion', 'Seizure', 'Weakness/numbness', 'Vision changes', 'Slurred speech', 'Loss of consciousness'],
+            'Musculoskeletal': ['Back pain', 'Joint pain', 'Muscle pain', 'Trauma/injury', 'Limited mobility'],
+            'Genitourinary': ['Painful urination', 'Blood in urine', 'Frequent urination', 'Inability to urinate', 'Flank pain'],
+            'Dermatological': ['Rash', 'Skin lesion', 'Burn', 'Laceration', 'Swelling'],
+            'General': ['Fever', 'Chills', 'Fatigue', 'Weight loss', 'Night sweats']
+        };
+
+        const commonAllergies = [
+            'No Known Allergies', 'SEP1', 'Penicillin', 'Sulfa drugs', 'Aspirin',
+            'Ibuprofen', 'Codeine', 'Morphine', 'Latex', 'SEP2', 'Peanuts', 'Tree nuts',
+            'Shellfish', 'Eggs', 'Milk/Dairy', 'Soy', 'Wheat/Gluten', 'SEP3',
+            'Pollen', 'Dust mites', 'Pet dander', 'Bee stings'
+        ];
+
+        const commonConditions = [
+            'Diabetes', 'Hypertension', 'Asthma', 'COPD', 'Heart disease', 'Stroke',
+            'Atrial Fibrillation', 'Kidney disease', 'Liver disease', 'Anxiety'
+        ];
+
+        function speak(text) {
+            state.isSpeaking = true;
+            console.log('🔊 ElevenLabs API Call:', text);
+            setTimeout(function() {
+                state.isSpeaking = false;
+                render();
+            }, 2000);
+            render();
+        }
+
+        function activateVoice() {
+            state.isVoiceActive = true;
+            speak('Hello, I am your AI assistant. How can I help you?');
+            console.log('🎤 Voice Assistant Activated - ElevenLabs listening...');
+            setTimeout(function() {
+                state.isVoiceActive = false;
+                render();
+            }, 3000);
+            render();
+        }
+
+        function calculateCTAS() {
+            const symptoms = state.patientData.selectedSymptoms;
+            
+            if (symptoms.includes('Loss of consciousness') || 
+                symptoms.includes('Coughing up blood') ||
+                symptoms.includes('Seizure')) {
+                return { score: 1, color: 'bg-red-600', label: 'Resuscitation', wait: 'Immediate' };
+            }
+            
+            if (symptoms.includes('Chest pain/pressure') || 
+                symptoms.includes('Difficulty breathing') ||
+                symptoms.includes('Slurred speech') ||
+                symptoms.includes('Confusion')) {
+                return { score: 2, color: 'bg-orange-600', label: 'Emergent', wait: '15 minutes' };
+            }
+            
+            if (symptoms.includes('Abdominal pain') || 
+                symptoms.includes('Vomiting') ||
+                symptoms.includes('Fever')) {
+                return { score: 3, color: 'bg-yellow-500', label: 'Urgent', wait: '30 minutes' };
+            }
+            
+            if (symptoms.length > 0) {
+                return { score: 4, color: 'bg-green-600', label: 'Less Urgent', wait: '1-2 hours' };
+            }
+            
+            return { score: 5, color: 'bg-blue-600', label: 'Non-Urgent', wait: '2-4 hours' };
+        }
+
+        function getMatchingPatients() {
+            const hasHealthCard = state.patientData.healthCardNumber.length >= 10;
+            if (hasHealthCard) {
+                return patientDatabase.filter(function(patient) {
+                    return patient.healthCardNumber.includes(state.patientData.healthCardNumber);
+                });
+            }
+            return [];
+        }
+
+        function selectPatient(patient) {
+            state.patientData.healthCardNumber = patient.healthCardNumber;
+            state.patientData.firstName = patient.firstName;
+            state.patientData.lastName = patient.lastName;
+            state.patientData.dob = patient.dob;
+            state.patientData.address = patient.address;
+            state.patientData.phone = patient.phone;
+            state.patientData.onFileAllergies = patient.allergies || [];
+            state.patientData.allergies = patient.allergies || [];
+            state.patientData.onFileMedications = patient.medications ? patient.medications.join(', ') : '';
+            state.patientData.medications = patient.medications ? patient.medications.join(', ') : '';
+            state.patientData.onFilePastConditions = patient.pastConditions || [];
+            state.patientData.pastConditions = patient.pastConditions || [];
+            state.patientData.onFileSurgicalHistory = patient.surgicalHistory || [];
+            state.patientData.surgicalHistory = patient.surgicalHistory || [];
+            state.patientData.onFileSocialHistory = patient.socialHistory || null;
+            state.patientData.socialHistory = patient.socialHistory || {
+                occupation: '',
+                housingCondition: '',
+                tobaccoPerDay: '',
+                alcoholPerDay: '',
+                substances: []
+            };
+            state.showSuggestions = false;
+            speak('Welcome ' + patient.firstName + '. Please verify your information.');
+            setTimeout(nextStep, 1000);
+        }
+
+        function nextStep() {
+            if (state.step === 2) {
+                speak('Please verify your information is correct.');
+            }
+            if (state.step === 6) {
+                const ctasResult = calculateCTAS();
+                state.patientData.ctasScore = ctasResult;
+            }
+            state.step++;
+            render();
+        }
+
+        function prevStep() {
+            state.step--;
+            render();
+        }
+
+        function resetCheckIn() {
+            state.step = 1;
+            state.language = '';
+            state.showSuggestions = false;
+            state.isVoiceActive = false;
+            state.isSpeaking = false;
+            state.showHistoryConfirmation = false;
+            state.patientData = {
+                healthCardNumber: '',
+                firstName: '',
+                lastName: '',
+                dob: '',
+                address: '',
+                phone: '',
+                selectedSymptoms: [],
+                otherSymptom: '',
+                allergies: [],
+                onFileAllergies: [],
+                newAllergies: [],
+                otherAllergy: '',
+                medications: '',
+                onFileMedications: '',
+                newMedications: '',
+                pastConditions: [],
+                onFilePastConditions: [],
+                newPastConditions: [],
+                surgicalHistory: [],
+                onFileSurgicalHistory: [],
+                newSurgicalHistory: [],
+                socialHistory: {
+                    occupation: '',
+                    housingCondition: '',
+                    tobaccoPerDay: '',
+                    alcoholPerDay: '',
+                    substances: []
+                },
+                onFileSocialHistory: null,
+                ctasScore: null
+            };
+            render();
+        }
+
+        const icons = {
+            mic: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>',
+            check: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+            user: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+            activity: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+            clipboard: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>',
+            fileText: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>',
+            checkCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+            alertCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>'
+        };
+
+        function VoiceAssistantButton() {
+            return '<button onclick="activateVoice()" class="fixed top-24 right-6 p-4 rounded-full shadow-lg transition-all ' + 
+                (state.isVoiceActive ? 'bg-green-500 animate-pulse' : 'bg-blue-600 hover:bg-blue-700') + 
+                '"><div class="w-8 h-8 text-white">' + icons.mic + '</div></button>';
+        }
+
+        function LanguageSelection() {
+            const languages = [
+                { code: 'en', name: 'English', flag: '🇨🇦' },
+                { code: 'fr', name: 'Français', flag: '🇫🇷' },
+                { code: 'pa', name: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
+                { code: 'zh', name: '中文', flag: '🇨🇳' },
+                { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+                { code: 'es', name: 'Español', flag: '🇪🇸' },
+                { code: 'tl', name: 'Filipino', flag: '🇵🇭' }
+            ];
+
+            let html = '<div class="text-center space-y-8"><div class="space-y-4">';
+            html += '<div class="text-8xl">🌐</div>';
+            html += '<h1 class="text-4xl font-bold text-gray-800">Welcome to Emergency</h1>';
+            html += '<p class="text-2xl text-gray-600">Please select or speak your language</p>';
+            html += '<div class="relative inline-block mt-4">';
+            html += '<button onclick="activateVoice()" class="relative px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xl font-semibold rounded-full hover:shadow-lg transition-all flex items-center space-x-3 mx-auto">';
+            html += '<div class="w-6 h-6">' + icons.mic + '</div><span>Use Voice</span></button></div></div>';
+            html += '<div class="grid grid-cols-2 gap-6 max-w-3xl mx-auto">';
+            
+            languages.forEach(function(lang) {
+                html += '<button onclick="selectLanguage(\'' + lang.code + '\')" class="p-8 bg-white border-4 border-gray-200 rounded-xl hover:border-blue-500 hover:shadow-lg transition-all text-left">';
+                html += '<div class="text-5xl mb-3">' + lang.flag + '</div>';
+                html += '<div class="text-2xl font-semibold text-gray-800">' + lang.name + '</div></button>';
+            });
+            
+            html += '</div></div>';
+            return html;
+        }
+
+        function IdentityVerification() {
+            const matchingPatients = getMatchingPatients();
+            
+            let html = VoiceAssistantButton();
+            html += '<div class="space-y-6">';
+            html += '<div class="flex items-center space-x-3 mb-6">';
+            html += '<div class="w-10 h-10 text-blue-600">' + icons.user + '</div>';
+            html += '<h2 class="text-3xl font-bold text-gray-800">Patient Check-In</h2></div>';
+            html += '<div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">';
+            html += '<p class="text-lg text-blue-800">Please enter your Alberta Health Card Number</p>';
+            html += '<p class="text-sm text-blue-600 mt-2">Your record will appear automatically when found</p></div>';
+            html += '<div class="space-y-5"><div>';
+            html += '<label class="block text-xl font-semibold text-gray-700 mb-2">Alberta Health Card Number *</label>';
+            html += '<input type="text" id="healthCardInput" placeholder="1234-5678-9012" value="' + state.patientData.healthCardNumber + '" ';
+            html += 'class="w-full p-4 text-2xl border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" /></div>';
+
+            if (state.showSuggestions && matchingPatients.length > 0) {
+                html += '<div class="bg-white border-4 border-green-500 rounded-lg p-6 shadow-xl animate-pulse">';
+                html += '<h3 class="text-xl font-bold text-green-700 mb-4 flex items-center">';
+                html += '<div class="w-6 h-6 mr-2">' + icons.checkCircle + '</div>✓ Patient Record Found</h3>';
+                
+                matchingPatients.forEach(function(patient, idx) {
+                    html += '<button onclick="selectPatientById(' + idx + ')" class="w-full text-left p-6 bg-gradient-to-r from-green-50 to-blue-50 hover:from-green-100 hover:to-blue-100 rounded-lg border-2 border-green-300 transition-all transform hover:scale-105">';
+                    html += '<div class="font-bold text-2xl text-gray-800 mb-2">' + patient.firstName + ' ' + patient.lastName + '</div>';
+                    html += '<div class="text-lg text-gray-600 space-y-1">';
+                    html += '<div>📅 DOB: ' + patient.dob + '</div>';
+                    html += '<div>📞 Phone: ' + patient.phone + '</div>';
+                    html += '<div>🏠 Address: ' + patient.address + '</div></div>';
+                    html += '<div class="mt-4 text-center"><span class="inline-block px-6 py-2 bg-green-600 text-white font-semibold rounded-full">Click to Continue →</span></div></button>';
+                });
+                
+                html += '</div>';
+            }
+
+            if (state.showSuggestions && state.patientData.healthCardNumber.length >= 10 && matchingPatients.length === 0) {
+                html += '<div class="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">';
+                html += '<p class="text-lg text-yellow-800">⚠️ No matching record found. Please check your health card number or visit the registration desk.</p></div>';
+            }
+
+            html += '</div><div class="flex justify-between mt-8">';
+            html += '<button onclick="prevStep()" class="px-8 py-4 text-xl bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Back</button>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function InformationVerification() {
+            let html = VoiceAssistantButton();
+            html += '<div class="space-y-6"><div class="flex items-center space-x-3 mb-6">';
+            html += '<div class="w-10 h-10 text-blue-600">' + icons.check + '</div>';
+            html += '<h2 class="text-3xl font-bold text-gray-800">Confirm Your Information</h2></div>';
+            html += '<div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">';
+            html += '<p class="text-lg text-yellow-800">Please verify that all information below is correct</p></div>';
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-6 space-y-6">';
+            html += '<div><label class="text-sm font-semibold text-gray-500 uppercase">Alberta Health Card Number</label>';
+            html += '<p class="text-2xl font-bold text-gray-800">' + state.patientData.healthCardNumber + '</p></div>';
+            html += '<div class="grid grid-cols-2 gap-6 border-t pt-4">';
+            html += '<div><label class="text-sm font-semibold text-gray-500 uppercase">First Name</label>';
+            html += '<p class="text-2xl font-bold text-gray-800">' + state.patientData.firstName + '</p></div>';
+            html += '<div><label class="text-sm font-semibold text-gray-500 uppercase">Last Name</label>';
+            html += '<p class="text-2xl font-bold text-gray-800">' + state.patientData.lastName + '</p></div></div>';
+            html += '<div class="border-t pt-4"><label class="text-sm font-semibold text-gray-500 uppercase">Date of Birth</label>';
+            html += '<p class="text-2xl font-bold text-gray-800">' + state.patientData.dob + '</p></div>';
+            html += '<div class="border-t pt-4"><label class="text-sm font-semibold text-gray-500 uppercase">Phone Number</label>';
+            html += '<p class="text-xl text-gray-800">' + state.patientData.phone + '</p></div>';
+            html += '<div class="border-t pt-4"><label class="text-sm font-semibold text-gray-500 uppercase">Address</label>';
+            html += '<p class="text-xl text-gray-800">' + state.patientData.address + '</p></div></div>';
+            html += '<div class="flex justify-between mt-8">';
+            html += '<button onclick="prevStep()" class="px-8 py-4 text-xl bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">← Go Back</button>';
+            html += '<button onclick="confirmInformation()" class="px-8 py-4 text-xl bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2">';
+            html += '<div class="w-6 h-6">' + icons.check + '</div><span>Yes, This is Correct</span></button></div></div>';
+            return html;
+        }
+
+        function SymptomCollection() {
+            let html = VoiceAssistantButton();
+            html += '<div class="space-y-6"><div class="flex items-center space-x-3 mb-6">';
+            html += '<div class="w-10 h-10 text-blue-600">' + icons.activity + '</div>';
+            html += '<h2 class="text-3xl font-bold text-gray-800">What brings you in today?</h2></div>';
+            html += '<div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">';
+            html += '<p class="text-lg text-blue-800">Select all symptoms you are experiencing or tell me about them</p></div>';
+            html += '<div class="space-y-4">';
+
+            Object.keys(symptomsBySystem).forEach(function(system) {
+                html += '<div class="bg-white border-2 border-gray-200 rounded-lg">';
+                html += '<div class="p-4 bg-gray-50 border-b-2 border-gray-200">';
+                html += '<h3 class="text-xl font-bold text-gray-700">' + system + '</h3></div>';
+                html += '<div class="p-4 grid grid-cols-1 gap-2">';
+                
+                symptomsBySystem[system].forEach(function(symptom) {
+                    const checked = state.patientData.selectedSymptoms.includes(symptom) ? 'checked' : '';
+                    const symptomId = 'symptom-' + symptom.replace(/[^a-zA-Z0-9]/g, '');
+                    html += '<label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">';
+                    html += '<input type="checkbox" id="' + symptomId + '" ' + checked + ' class="w-6 h-6 text-blue-600" data-symptom="' + symptom + '" />';
+                    html += '<span class="text-lg text-gray-700">' + symptom + '</span></label>';
+                });
+                
+                html += '</div></div>';
+            });
+
+            html += '</div>';
+
+            if (state.patientData.selectedSymptoms.length > 0) {
+                html += '<div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">';
+                html += '<h4 class="font-bold text-gray-700 mb-2">Selected Symptoms:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.selectedSymptoms.forEach(function(symptom) {
+                    html += '<span class="px-3 py-1 bg-blue-500 text-white rounded-full text-sm">' + symptom + '</span>';
+                });
+                html += '</div></div>';
+            }
+
+            html += '<div><label class="block text-lg font-semibold text-gray-700 mb-2">Other symptoms (optional)</label>';
+            html += '<textarea id="otherSymptom" placeholder="Describe any other symptoms..." class="w-full p-4 text-lg border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" rows="3">' + state.patientData.otherSymptom + '</textarea></div>';
+            html += '<div class="flex justify-between mt-6">';
+            html += '<button onclick="prevStep()" class="px-8 py-4 text-xl bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Back</button>';
+            html += '<button onclick="continueFromSymptoms()" ' + (state.patientData.selectedSymptoms.length === 0 ? 'disabled' : '') + ' class="px-8 py-4 text-xl bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">Continue</button>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function MedicalHistory() {
+            let html = VoiceAssistantButton();
+            html += '<div class="space-y-6"><div class="flex items-center justify-between mb-6">';
+            html += '<div class="flex items-center space-x-3"><div class="w-10 h-10 text-blue-600">' + icons.clipboard + '</div>';
+            html += '<h2 class="text-3xl font-bold text-gray-800">Medical History</h2></div>';
+            html += '<button onclick="confirmExistingHistory()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center space-x-2">';
+            html += '<div class="w-5 h-5">' + icons.check + '</div><span>Confirm Existing History</span></button></div>';
+
+            if (state.showHistoryConfirmation) {
+                html += '<div class="bg-green-50 border-2 border-green-500 rounded-lg p-4 animate-pulse">';
+                html += '<p class="text-lg text-green-800 font-semibold">✓ Medical history on file has been confirmed. You can add or update information below.</p></div>';
+            }
+
+            html += '<div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">';
+            html += '<p class="text-lg text-yellow-800">This information helps us provide safe and effective care</p></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-2xl font-bold text-gray-700 mb-4 flex items-center">';
+            html += '<div class="w-6 h-6 mr-2 text-red-500">' + icons.alertCircle + '</div>Allergies *</h3>';
+            
+            if (state.patientData.onFileAllergies.length > 0) {
+                html += '<div class="mb-4 bg-red-50 border-2 border-red-300 rounded p-3">';
+                html += '<h4 class="text-sm font-bold text-red-700 mb-2">ON FILE:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.onFileAllergies.forEach(function(allergy) {
+                    html += '<span class="px-3 py-1 bg-red-200 text-red-900 rounded-full text-sm font-semibold border-2 border-red-400">' + allergy + '</span>';
+                });
+                html += '</div></div>';
+            }
+            
+            html += '<div class="max-h-64 overflow-y-auto pr-2 space-y-2">';
+            commonAllergies.forEach(function(allergy) {
+                if (allergy.startsWith('SEP')) {
+                    const labels = {'SEP1': '--- Medications ---', 'SEP2': '--- Foods ---', 'SEP3': '--- Environmental ---'};
+                    html += '<div class="text-sm font-bold text-gray-500 mt-3 mb-1">' + labels[allergy] + '</div>';
+                } else {
+                    const checked = state.patientData.newAllergies.includes(allergy) ? 'checked' : '';
+                    const allergyId = 'allergy-' + allergy.replace(/[^a-zA-Z0-9]/g, '');
+                    html += '<label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">';
+                    html += '<input type="checkbox" id="' + allergyId + '" ' + checked + ' class="w-6 h-6 text-red-600" data-allergy="' + allergy + '" />';
+                    html += '<span class="text-lg text-gray-700">' + allergy + '</span></label>';
+                }
+            });
+            html += '</div><div class="mt-3">';
+            html += '<input type="text" id="otherAllergy" placeholder="Other allergies not listed above..." value="' + state.patientData.otherAllergy + '" ';
+            html += 'class="w-full p-3 text-lg border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" /></div></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-3">Current Medications</h3>';
+            
+            if (state.patientData.onFileMedications) {
+                html += '<div class="mb-4 bg-blue-50 border-2 border-blue-300 rounded p-3">';
+                html += '<h4 class="text-sm font-bold text-blue-700 mb-2">ON FILE:</h4>';
+                html += '<p class="text-gray-800">' + state.patientData.onFileMedications + '</p></div>';
+            }
+            
+            html += '<textarea id="newMedications" placeholder="Add any new medications or update your current medications..." ';
+            html += 'class="w-full p-4 text-lg border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" rows="3">' + state.patientData.newMedications + '</textarea>';
+            html += '<p class="text-sm text-gray-500 mt-2">Include medication name, dosage, and frequency</p></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-3">Past Medical History</h3>';
+            
+            if (state.patientData.onFilePastConditions.length > 0) {
+                html += '<div class="mb-4 bg-blue-50 border-2 border-blue-300 rounded p-3">';
+                html += '<h4 class="text-sm font-bold text-blue-700 mb-2">ON FILE:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.onFilePastConditions.forEach(function(condition) {
+                    html += '<span class="px-3 py-1 bg-blue-200 text-blue-900 rounded-full text-sm font-semibold border-2 border-blue-400">' + condition + '</span>';
+                });
+                html += '</div></div>';
+            }
+            
+            html += '<div class="grid grid-cols-2 gap-2">';
+            commonConditions.forEach(function(condition) {
+                const checked = state.patientData.newPastConditions.includes(condition) ? 'checked' : '';
+                const conditionId = 'condition-' + condition.replace(/[^a-zA-Z0-9]/g, '');
+                html += '<label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">';
+                html += '<input type="checkbox" id="' + conditionId + '" ' + checked + ' class="w-5 h-5 text-blue-600" data-condition="' + condition + '" />';
+                html += '<span class="text-base text-gray-700">' + condition + '</span></label>';
+            });
+            html += '</div></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-3">Surgical History</h3>';
+            
+            if (state.patientData.onFileSurgicalHistory.length > 0) {
+                html += '<div class="mb-4 bg-purple-50 border-2 border-purple-300 rounded p-3">';
+                html += '<h4 class="text-sm font-bold text-purple-700 mb-2">ON FILE:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.onFileSurgicalHistory.forEach(function(surgery) {
+                    html += '<span class="px-3 py-1 bg-purple-200 text-purple-900 rounded-full text-sm font-semibold border-2 border-purple-400">' + surgery + '</span>';
+                });
+                html += '</div></div>';
+            }
+            
+            html += '<div class="grid grid-cols-2 gap-2">';
+            commonSurgeries.forEach(function(surgery) {
+                const checked = state.patientData.newSurgicalHistory.includes(surgery) ? 'checked' : '';
+                const surgeryId = 'surgery-' + surgery.replace(/[^a-zA-Z0-9]/g, '');
+                html += '<label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">';
+                html += '<input type="checkbox" id="' + surgeryId + '" ' + checked + ' class="w-5 h-5 text-purple-600" data-surgery="' + surgery + '" />';
+                html += '<span class="text-base text-gray-700">' + surgery + '</span></label>';
+            });
+            html += '</div></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-4">Social History</h3>';
+            
+            if (state.patientData.onFileSocialHistory) {
+                html += '<div class="mb-4 bg-green-50 border-2 border-green-300 rounded p-3">';
+                html += '<h4 class="text-sm font-bold text-green-700 mb-2">ON FILE:</h4>';
+                html += '<div class="grid grid-cols-2 gap-2 text-sm">';
+                if (state.patientData.onFileSocialHistory.occupation) {
+                    html += '<p><strong>Occupation:</strong> ' + state.patientData.onFileSocialHistory.occupation + '</p>';
+                }
+                if (state.patientData.onFileSocialHistory.housingCondition) {
+                    html += '<p><strong>Housing:</strong> ' + state.patientData.onFileSocialHistory.housingCondition + '</p>';
+                }
+                html += '</div></div>';
+            }
+            
+            html += '<div class="space-y-4"><div class="grid grid-cols-2 gap-4">';
+            html += '<div><label class="block text-sm font-semibold text-gray-700 mb-1">Occupation</label>';
+            html += '<input type="text" id="occupation" placeholder="e.g., Teacher, Retired" value="' + state.patientData.socialHistory.occupation + '" ';
+            html += 'class="w-full p-3 text-base border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" /></div>';
+            html += '<div><label class="block text-sm font-semibold text-gray-700 mb-1">Housing Condition</label>';
+            html += '<select id="housingCondition" class="w-full p-3 text-base border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none">';
+            html += '<option value="">Select...</option>';
+            const housingOptions = ['Own home', 'Rent apartment', 'Rent house', 'Living with family', 'Assisted living', 'Homeless', 'Other'];
+            housingOptions.forEach(function(option) {
+                const selected = state.patientData.socialHistory.housingCondition === option ? 'selected' : '';
+                html += '<option value="' + option + '" ' + selected + '>' + option + '</option>';
+            });
+            html += '</select></div></div>';
+            html += '<div class="grid grid-cols-2 gap-4">';
+            html += '<div><label class="block text-sm font-semibold text-gray-700 mb-1">Tobacco Use (per day)</label>';
+            html += '<input type="text" id="tobaccoPerDay" placeholder="e.g., 0, 5, 10" value="' + state.patientData.socialHistory.tobaccoPerDay + '" ';
+            html += 'class="w-full p-3 text-base border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" /></div>';
+            html += '<div><label class="block text-sm font-semibold text-gray-700 mb-1">Alcohol Use (drinks per day)</label>';
+            html += '<input type="text" id="alcoholPerDay" placeholder="e.g., 0, 1-2" value="' + state.patientData.socialHistory.alcoholPerDay + '" ';
+            html += 'class="w-full p-3 text-base border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" /></div></div>';
+            html += '<div><label class="block text-sm font-semibold text-gray-700 mb-2">Substance Use</label>';
+            html += '<div class="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-lg">';
+            ['Cannabis', 'Cocaine', 'Crystal Meth', 'Fentanyl'].forEach(function(substance) {
+                const checked = state.patientData.socialHistory.substances.includes(substance) ? 'checked' : '';
+                const substanceId = 'substance-' + substance.replace(/[^a-zA-Z0-9]/g, '');
+                html += '<label class="flex items-center space-x-2 p-2 hover:bg-white rounded cursor-pointer">';
+                html += '<input type="checkbox" id="' + substanceId + '" ' + checked + ' class="w-5 h-5 text-orange-600" data-substance="' + substance + '" />';
+                html += '<span class="text-base text-gray-700">' + substance + '</span></label>';
+            });
+            html += '</div></div></div></div>';
+
+            html += '<div class="flex justify-between mt-6">';
+            html += '<button onclick="prevStep()" class="px-8 py-4 text-xl bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Back</button>';
+            html += '<button onclick="continueFromHistory()" ' + (state.patientData.allergies.length === 0 ? 'disabled' : '') + ' class="px-8 py-4 text-xl bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">Continue</button>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function SummaryAndTriage() {
+            const ctasResult = state.patientData.ctasScore || calculateCTAS();
+            const currentDateTime = new Date().toLocaleString('en-CA', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+            const queuePositions = { 1: Math.floor(Math.random() * 25) + 1, 2: Math.floor(Math.random() * 26) + 1, 
+                3: Math.floor(Math.random() * 28) + 1, 4: Math.floor(Math.random() * 31) + 1, 5: Math.floor(Math.random() * 35) + 1 };
+            const queueNumber = ctasResult.score + '-' + queuePositions[ctasResult.score];
+
+            let html = VoiceAssistantButton();
+            html += '<div class="space-y-6"><div class="flex items-center space-x-3 mb-6">';
+            html += '<div class="w-10 h-10 text-blue-600">' + icons.fileText + '</div>';
+            html += '<h2 class="text-3xl font-bold text-gray-800">Review Your Information</h2></div>';
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-3">Patient Information</h3>';
+            html += '<div class="space-y-2 text-lg">';
+            html += '<p><strong>Name:</strong> ' + state.patientData.firstName + ' ' + state.patientData.lastName + '</p>';
+            html += '<p><strong>DOB:</strong> ' + state.patientData.dob + '</p>';
+            html += '<p><strong>Health Card:</strong> ' + state.patientData.healthCardNumber + '</p>';
+            html += '<p><strong>Phone:</strong> ' + state.patientData.phone + '</p></div></div>';
+            html += '<div class="' + ctasResult.color + ' text-white rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold mb-3">Triage Level</h3><div class="text-center">';
+            html += '<div class="text-6xl font-bold mb-2">' + ctasResult.score + '</div>';
+            html += '<div class="text-2xl font-semibold mb-2">' + ctasResult.label + '</div>';
+            html += '<div class="text-lg">Est. Wait: ' + ctasResult.wait + '</div></div></div></div>';
+
+            html += '<div class="bg-white border-2 border-gray-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-gray-700 mb-3">Presenting Symptoms</h3>';
+            html += '<div class="flex flex-wrap gap-2">';
+            state.patientData.selectedSymptoms.forEach(function(symptom) {
+                html += '<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">' + symptom + '</span>';
+            });
+            html += '</div>';
+            if (state.patientData.otherSymptom) {
+                html += '<p class="mt-3 text-gray-700"><strong>Other:</strong> ' + state.patientData.otherSymptom + '</p>';
+            }
+            html += '</div>';
+
+            html += '<div class="bg-white border-2 border-red-200 rounded-lg p-5">';
+            html += '<h3 class="text-xl font-bold text-red-700 mb-3">⚠️ Allergies</h3>';
+            if (state.patientData.onFileAllergies.length > 0) {
+                html += '<div class="mb-3"><h4 class="text-sm font-semibold text-red-600 mb-2">On File:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.onFileAllergies.forEach(function(allergy) {
+                    html += '<span class="px-3 py-1 bg-red-200 text-red-900 rounded-full text-sm font-semibold border-2 border-red-400">' + allergy + '</span>';
+                });
+                html += '</div></div>';
+            }
+            if (state.patientData.newAllergies.length > 0) {
+                html += '<div><h4 class="text-sm font-semibold text-red-600 mb-2">Newly Added:</h4>';
+                html += '<div class="flex flex-wrap gap-2">';
+                state.patientData.newAllergies.forEach(function(allergy) {
+                    html += '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold">' + allergy + '</span>';
+                });
+                html += '</div></div>';
+            }
+            if (state.patientData.otherAllergy) {
+                html += '<div class="mt-2"><span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold">' + state.patientData.otherAllergy + '</span></div>';
+            }
+            html += '</div>';
+
+            html += '<div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-orange-300 rounded-lg p-6">';
+            html += '<h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">🏷️ Patient Information Summary</h3>';
+            html += '<div class="bg-white border-4 border-gray-800 rounded-lg p-4 shadow-xl">';
+            html += '<div class="flex justify-between items-start border-b-2 border-gray-300 pb-3 mb-3">';
+            html += '<div><div class="text-xs font-semibold text-gray-500">EMERGENCY DEPT</div>';
+            html += '<div class="text-2xl font-bold text-gray-900">' + state.patientData.lastName + ', ' + state.patientData.firstName + '</div></div>';
+            html += '<div class="' + ctasResult.color + ' text-white px-4 py-2 rounded font-bold text-xl">CTAS ' + ctasResult.score + '</div></div>';
+            html += '<div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mb-3">';
+            html += '<div><span class="font-semibold">DOB:</span> ' + state.patientData.dob + '</div>';
+            html += '<div><span class="font-semibold">Queue #:</span> ' + queueNumber + '</div>';
+            html += '<div><span class="font-semibold">Health Card:</span> ' + state.patientData.healthCardNumber + '</div>';
+            html += '<div><span class="font-semibold">Check-in:</span> ' + currentDateTime + '</div></div>';
+            html += '<div class="bg-red-50 border-2 border-red-500 rounded p-2 mb-3">';
+            html += '<div class="font-bold text-red-800 text-sm mb-1">⚠️ ALLERGIES:</div>';
+            html += '<div class="text-red-900 font-semibold text-sm">';
+            html += state.patientData.allergies.length > 0 ? state.patientData.allergies.join(', ') : 'No Known Allergies';
+            if (state.patientData.otherAllergy) html += ', ' + state.patientData.otherAllergy;
+            html += '</div></div></div>';
+            html += '<p class="text-sm text-gray-600 mt-3 text-center italic">Your confirmation slip will be printed</p></div>';
+
+            html += '<div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg">';
+            html += '<h3 class="text-xl font-bold text-blue-900 mb-2 flex items-center">📋 Next Steps</h3>';
+            html += '<p class="text-lg text-blue-800"><strong>Please proceed to the Nurse\'s desk to collect your wristband.</strong></p></div>';
+
+            html += '<div class="flex justify-between mt-6">';
+            html += '<button onclick="prevStep()" class="px-8 py-4 text-xl bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Back</button>';
+            html += '<button onclick="printConfirmation()" class="px-8 py-4 text-xl bg-green-600 text-white rounded-lg hover:bg-green-700">Print Confirmation Slip</button>';
+            html += '</div></div>';
+            return html;
+        }
+
+        function Confirmation() {
+            const ctasResult = state.patientData.ctasScore || calculateCTAS();
+            const queuePositions = { 1: Math.floor(Math.random() * 25) + 1, 2: Math.floor(Math.random() * 26) + 1, 
+                3: Math.floor(Math.random() * 28) + 1, 4: Math.floor(Math.random() * 31) + 1, 5: Math.floor(Math.random() * 35) + 1 };
+            const queueNumber = ctasResult.score + '-' + queuePositions[ctasResult.score];
+
+            let html = '<div class="text-center space-y-8">';
+            html += '<div class="w-24 h-24 mx-auto text-green-600">' + icons.checkCircle + '</div>';
+            html += '<h1 class="text-4xl font-bold text-gray-800">Check-In Complete!</h1>';
+            html += '<div class="max-w-md mx-auto bg-white border-4 border-gray-800 rounded-lg p-8">';
+            html += '<div class="text-sm text-gray-600 mb-2">QUEUE NUMBER</div>';
+            html += '<div class="text-9xl font-bold text-gray-800 mb-4">' + queueNumber + '</div>';
+            html += '<div class="' + ctasResult.color + ' text-white text-xl font-semibold py-3 rounded">';
+            html += 'CTAS ' + ctasResult.score + ' - ' + ctasResult.label + '</div>';
+            html += '<div class="mt-4 text-lg text-gray-700">';
+            html += '<p class="text-sm text-gray-500">You will receive a text notification</p></div></div>';
+            html += '<div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 max-w-xl mx-auto">';
+            html += '<h3 class="text-xl font-bold text-blue-800 mb-3">📱 What\'s Next?</h3>';
+            html += '<ul class="text-left text-lg text-blue-900 space-y-2">';
+            html += '<li>✓ Your confirmation slip has been printed</li>';
+            html += '<li>✓ <strong>Proceed to the Nurse\'s desk to collect your wristband</strong></li>';
+            html += '<li>✓ Please stay in the waiting area after collection</li>';
+            html += '<li>✓ You\'ll receive a text 15 minutes before your turn</li>';
+            html += '<li>✓ Your vitals will be checked every 2 hours automatically</li></ul></div>';
+            html += '<button onclick="resetCheckIn()" class="px-8 py-4 text-xl bg-blue-600 text-white rounded-lg hover:bg-blue-700">Start New Check-In</button>';
+            html += '</div>';
+            return html;
+        }
+
+        function ProgressBar() {
+            if (state.step > 6) return '';
+            
+            const steps = ['Language', 'Health Card', 'Confirm', 'Symptoms', 'History', 'Review'];
+            let html = '<div class="bg-white px-6 py-3 mb-2">';
+            html += '<div class="flex justify-between items-center mb-2">';
+            
+            steps.forEach(function(label, idx) {
+                const num = idx + 1;
+                const active = state.step >= num ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600';
+                html += '<div class="flex flex-col items-center">';
+                html += '<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold ' + active + '">' + num + '</div>';
+                html += '<span class="text-xs mt-1 text-gray-600">' + label + '</span></div>';
+            });
+            
+            html += '</div><div class="w-full bg-gray-200 h-2 rounded-full">';
+            html += '<div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ' + ((state.step / 6) * 100) + '%"></div></div></div>';
+            return html;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            let content = '';
+            
+            if (state.step === 1) content = LanguageSelection();
+            else if (state.step === 2) content = IdentityVerification();
+            else if (state.step === 3) content = InformationVerification();
+            else if (state.step === 4) content = SymptomCollection();
+            else if (state.step === 5) content = MedicalHistory();
+            else if (state.step === 6) content = SummaryAndTriage();
+            else if (state.step === 7) content = Confirmation();
+            
+            let html = '<div class="bg-white rounded-t-xl shadow-lg p-6 mb-2">';
+            html += '<div class="flex justify-between items-center"><div>';
+            html += '<h1 class="text-3xl font-bold text-gray-800">Triage ER Self Check In System</h1>';
+            html += '<p class="text-lg text-gray-600">Emergency Department Self-Service Check-In</p></div>';
+            
+            if (state.isSpeaking) {
+                html += '<div class="flex items-center space-x-2 text-blue-600 animate-pulse">';
+                html += '<div class="w-8 h-8">' + icons.mic + '</div>';
+                html += '<span class="text-lg font-semibold">Speaking...</span></div>';
+            }
+            if (state.isVoiceActive) {
+                html += '<div class="flex items-center space-x-2 text-green-600 animate-pulse">';
+                html += '<div class="w-8 h-8">' + icons.mic + '</div>';
+                html += '<span class="text-lg font-semibold">Listening...</span></div>';
+            }
+            
+            html += '</div></div>';
+            html += ProgressBar();
+            html += '<div class="bg-white rounded-b-xl shadow-lg p-8 min-h-[600px]">' + content + '</div>';
+            html += '<div class="text-center mt-6 text-gray-600">';
+            html += '<p class="text-sm">🔒 Your information is protected under PIPA and HIA</p>';
+            html += '<p class="text-xs mt-1">Need help? Press the call button or visit the registration desk</p></div>';
+            
+            app.innerHTML = html;
+            attachEventListeners();
+        }
+
+        function attachEventListeners() {
+            const healthCardInput = document.getElementById('healthCardInput');
+            if (healthCardInput) {
+                healthCardInput.addEventListener('input', function(e) {
+                    state.patientData.healthCardNumber = e.target.value;
+                    state.showSuggestions = true;
+                    render();
+                });
+            }
+
+            const otherSymptom = document.getElementById('otherSymptom');
+            if (otherSymptom) {
+                otherSymptom.addEventListener('input', function(e) {
+                    state.patientData.otherSymptom = e.target.value;
+                });
+            }
+
+            const symptomCheckboxes = document.querySelectorAll('[data-symptom]');
+            symptomCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function(e) {
+                    const symptom = e.target.getAttribute('data-symptom');
+                    if (e.target.checked) {
+                        if (!state.patientData.selectedSymptoms.includes(symptom)) {
+                            state.patientData.selectedSymptoms.push(symptom);
+                        }
+                    } else {
+                        state.patientData.selectedSymptoms = state.patientData.selectedSymptoms.filter(function(s) {
+                            return s !== symptom;
+                        });
+                    }
+                    render();
+                });
+            });
+
+            const allergyCheckboxes = document.querySelectorAll('[data-allergy]');
+            allergyCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function(e) {
+                    const allergy = e.target.getAttribute('data-allergy');
+                    if (e.target.checked) {
+                        if (!state.patientData.newAllergies.includes(allergy)) {
+                            state.patientData.newAllergies.push(allergy);
+                        }
+                    } else {
+                        state.patientData.newAllergies = state.patientData.newAllergies.filter(function(a) {
+                            return a !== allergy;
+                        });
+                    }
+                    state.patientData.allergies = state.patientData.onFileAllergies.concat(state.patientData.newAllergies);
+                    render();
+                });
+            });
+
+            const otherAllergy = document.getElementById('otherAllergy');
+            if (otherAllergy) {
+                otherAllergy.addEventListener('input', function(e) {
+                    state.patientData.otherAllergy = e.target.value;
+                });
+            }
+
+            const newMedications = document.getElementById('newMedications');
+            if (newMedications) {
+                newMedications.addEventListener('input', function(e) {
+                    state.patientData.newMedications = e.target.value;
+                });
+            }
+
+            const conditionCheckboxes = document.querySelectorAll('[data-condition]');
+            conditionCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function(e) {
+                    const condition = e.target.getAttribute('data-condition');
+                    if (e.target.checked) {
+                        if (!state.patientData.newPastConditions.includes(condition)) {
+                            state.patientData.newPastConditions.push(condition);
+                        }
+                    } else {
+                        state.patientData.newPastConditions = state.patientData.newPastConditions.filter(function(c) {
+                            return c !== condition;
+                        });
+                    }
+                    state.patientData.pastConditions = state.patientData.onFilePastConditions.concat(state.patientData.newPastConditions);
+                    render();
+                });
+            });
+
+            const surgeryCheckboxes = document.querySelectorAll('[data-surgery]');
+            surgeryCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function(e) {
+                    const surgery = e.target.getAttribute('data-surgery');
+                    if (e.target.checked) {
+                        if (!state.patientData.newSurgicalHistory.includes(surgery)) {
+                            state.patientData.newSurgicalHistory.push(surgery);
+                        }
+                    } else {
+                        state.patientData.newSurgicalHistory = state.patientData.newSurgicalHistory.filter(function(s) {
+                            return s !== surgery;
+                        });
+                    }
+                    state.patientData.surgicalHistory = state.patientData.onFileSurgicalHistory.concat(state.patientData.newSurgicalHistory);
+                    render();
+                });
+            });
+
+            const occupation = document.getElementById('occupation');
+            if (occupation) {
+                occupation.addEventListener('input', function(e) {
+                    state.patientData.socialHistory.occupation = e.target.value;
+                });
+            }
+
+            const housingCondition = document.getElementById('housingCondition');
+            if (housingCondition) {
+                housingCondition.addEventListener('change', function(e) {
+                    state.patientData.socialHistory.housingCondition = e.target.value;
+                });
+            }
+
+            const tobaccoPerDay = document.getElementById('tobaccoPerDay');
+            if (tobaccoPerDay) {
+                tobaccoPerDay.addEventListener('input', function(e) {
+                    state.patientData.socialHistory.tobaccoPerDay = e.target.value;
+                });
+            }
+
+            const alcoholPerDay = document.getElementById('alcoholPerDay');
+            if (alcoholPerDay) {
+                alcoholPerDay.addEventListener('input', function(e) {
+                    state.patientData.socialHistory.alcoholPerDay = e.target.value;
+                });
+            }
+
+            const substanceCheckboxes = document.querySelectorAll('[data-substance]');
+            substanceCheckboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function(e) {
+                    const substance = e.target.getAttribute('data-substance');
+                    if (e.target.checked) {
+                        if (!state.patientData.socialHistory.substances.includes(substance)) {
+                            state.patientData.socialHistory.substances.push(substance);
+                        }
+                    } else {
+                        state.patientData.socialHistory.substances = state.patientData.socialHistory.substances.filter(function(s) {
+                            return s !== substance;
+                        });
+                    }
+                    render();
+                });
+            });
+        }
+
+        window.selectLanguage = function(code) {
+            state.language = code;
+            speak('Welcome. Please follow the instructions on screen.');
+            setTimeout(nextStep, 1500);
+        };
+
+        window.selectPatientById = function(idx) {
+            const matchingPatients = getMatchingPatients();
+            selectPatient(matchingPatients[idx]);
+            render();
+        };
+
+        window.confirmInformation = function() {
+            speak('Thank you ' + state.patientData.firstName + '. Let\'s talk about your symptoms.');
+            setTimeout(nextStep, 1500);
+        };
+
+        window.continueFromSymptoms = function() {
+            speak('Now lets review your medical history.');
+            setTimeout(nextStep, 1500);
+        };
+
+        window.confirmExistingHistory = function() {
+            state.showHistoryConfirmation = true;
+            speak('Here is your medical history on file. Please review and update as needed.');
+            setTimeout(function() {
+                state.showHistoryConfirmation = false;
+                render();
+            }, 5000);
+            render();
+        };
+
+        window.continueFromHistory = function() {
+            speak('Let me summarize your information.');
+            setTimeout(nextStep, 1500);
+        };
+
+        window.printConfirmation = function() {
+            speak('Your check-in is complete. Please collect your confirmation slip.');
+            setTimeout(nextStep, 1500);
+        };
+
+        render();
+    </script>
+</body>
+</html>
